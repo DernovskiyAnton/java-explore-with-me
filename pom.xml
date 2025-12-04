@@ -16,6 +16,10 @@
 	<artifactId>explore-with-me</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>pom</packaging>
+	<modules>
+		<module>stats</module>
+		<module>ewm-main-service</module>
+	</modules>
 
 	<properties>
 		<java.version>21</java.version>
