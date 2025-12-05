@@ -6,11 +6,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.client.StatsClient;
+import ru.practicum.dto.EndpointHitDto;
+import ru.practicum.dto.ViewStatsDto;
 import ru.practicum.ewm.category.model.Category;
 import ru.practicum.ewm.category.repository.CategoryRepository;
 import ru.practicum.ewm.event.dto.*;
 import ru.practicum.ewm.event.mapper.EventMapper;
 import ru.practicum.ewm.event.model.Event;
+import ru.practicum.ewm.event.model.EventSort;
 import ru.practicum.ewm.event.model.EventState;
 import ru.practicum.ewm.event.model.Location;
 import ru.practicum.ewm.event.repository.EventRepository;
@@ -19,9 +23,13 @@ import ru.practicum.ewm.exception.ConflictException;
 import ru.practicum.ewm.exception.NotFoundException;
 import ru.practicum.ewm.user.model.User;
 import ru.practicum.ewm.user.repository.UserRepository;
+import ru.practicum.ewm.exception.ValidationException;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +43,7 @@ public class EventService {
     private final CategoryRepository categoryRepository;
     private final LocationRepository locationRepository;
     private final EventMapper eventMapper;
+    private final StatsClient statsClient;
 
     @Transactional
     public EventFullDto addEvent(Long userId, NewEventDto dto) {
@@ -42,7 +51,7 @@ public class EventService {
 
         // Проверка что дата события не раньше чем через 2 часа
         if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ConflictException("Event date must be at least 2 hours from now");
+            throw new ValidationException("Event date must be at least 2 hours from now");
         }
 
         User user = getUserById(userId);
@@ -85,8 +94,8 @@ public class EventService {
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
         // Можно изменять только отмененные события или события в состоянии ожидания модерации
-        if (event.getState() == EventState.PUBLISHED) {
-            throw new ConflictException("Only pending or canceled events can be changed");
+        if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
+            throw new ValidationException("Event date must be at least 2 hours from now");
         }
 
         // Проверка даты события
@@ -243,5 +252,155 @@ public class EventService {
     private Event getEventById(Long eventId) {
         return eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+    }
+
+    public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
+                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                               Boolean onlyAvailable, EventSort sort,
+                                               Integer from, Integer size,
+                                               String ip, String uri) {
+        log.info("Getting public events with filters");
+
+        // Отправка статистики
+        sendStatistics(ip, uri);
+
+        // Если даты не указаны - берем события от текущего момента
+        if (rangeStart == null && rangeEnd == null) {
+            rangeStart = LocalDateTime.now();
+        }
+
+        // Валидация дат
+        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
+            throw new ValidationException("Start date must be before end date");
+        }
+
+        Pageable pageable = PageRequest.of(from / size, size);
+
+        // Фильтр только опубликованные события
+        List<Event> events = eventRepository.findPublicEvents(
+                text != null ? text.toLowerCase() : null,
+                categories,
+                paid,
+                rangeStart,
+                rangeEnd,
+                pageable
+        );
+
+        // Фильтр только доступные (если требуется)
+        if (Boolean.TRUE.equals(onlyAvailable)) {
+            events = events.stream()
+                    .filter(e -> e.getParticipantLimit() == 0 ||
+                            e.getConfirmedRequests() < e.getParticipantLimit())
+                    .collect(Collectors.toList());
+        }
+
+        // Получение статистики просмотров
+        Map<Long, Long> viewsMap = getViewsForEvents(events);
+
+        // Обновление views в событиях
+        events.forEach(event -> {
+            Long views = viewsMap.getOrDefault(event.getId(), 0L);
+            event.setViews(views);
+        });
+
+        // Сортировка
+        if (sort != null) {
+            switch (sort) {
+                case EVENT_DATE:
+                    events.sort(Comparator.comparing(Event::getEventDate));
+                    break;
+                case VIEWS:
+                    events.sort(Comparator.comparing(Event::getViews).reversed());
+                    break;
+            }
+        }
+
+        return events.stream()
+                .map(eventMapper::toShortDto)
+                .collect(Collectors.toList());
+    }
+
+    public EventFullDto getPublishedEvent(Long eventId, String ip, String uri) {
+        log.info("Getting published event: {}", eventId);
+
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+
+        if (event.getState() != EventState.PUBLISHED) {
+            throw new NotFoundException("Event with id=" + eventId + " was not found");
+        }
+
+        // Отправка статистики
+        sendStatistics(ip, uri);
+
+        // Получение views из stats-service
+        Long views = getViewsForEvent(eventId);
+        event.setViews(views);
+
+        return eventMapper.toFullDto(event);
+    }
+
+    private void sendStatistics(String ip, String uri) {
+        try {
+            EndpointHitDto hitDto = new EndpointHitDto();
+            hitDto.setApp("ewm-main-service");
+            hitDto.setUri(uri);
+            hitDto.setIp(ip);
+            hitDto.setTimestamp(LocalDateTime.now());
+
+            statsClient.saveHit(hitDto);
+            log.info("Sent statistics for uri: {}, ip: {}", uri, ip);
+        } catch (Exception e) {
+            log.error("Failed to send statistics", e);
+        }
+    }
+
+    private Long getViewsForEvent(Long eventId) {
+        try {
+            List<ViewStatsDto> stats = statsClient.getStats(
+                    LocalDateTime.of(2020, 1, 1, 0, 0),
+                    LocalDateTime.now().plusDays(1),
+                    List.of("/events/" + eventId),
+                    true
+            );
+
+            if (stats != null && !stats.isEmpty()) {
+                return stats.get(0).getHits();
+            }
+        } catch (Exception e) {
+            log.error("Failed to get views for event {}", eventId, e);
+        }
+        return 0L;
+    }
+
+    private Map<Long, Long> getViewsForEvents(List<Event> events) {
+        if (events.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<String> uris = events.stream()
+                .map(e -> "/events/" + e.getId())
+                .collect(Collectors.toList());
+
+        try {
+            List<ViewStatsDto> stats = statsClient.getStats(
+                    LocalDateTime.of(2020, 1, 1, 0, 0),
+                    LocalDateTime.now().plusDays(1),
+                    uris,
+                    true
+            );
+
+            if (stats != null) {
+                return stats.stream()
+                        .collect(Collectors.toMap(
+                                stat -> Long.parseLong(stat.getUri().substring("/events/".length())),
+                                ViewStatsDto::getHits
+                        ));
+            }
+        } catch (Exception e) {
+            log.error("Failed to get views for events", e);
+        }
+
+        return Collections.emptyMap();
     }
 }
