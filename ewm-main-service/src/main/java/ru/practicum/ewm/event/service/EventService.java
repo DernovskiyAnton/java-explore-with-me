@@ -403,4 +403,34 @@ public class EventService {
 
         return Collections.emptyMap();
     }
+
+    public List<EventFullDto> getAdminEvents(List<Long> users, List<String> states,
+                                             List<Long> categories,
+                                             LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                             Integer from, Integer size) {
+        log.info("Getting admin events with filters");
+
+        Pageable pageable = PageRequest.of(from / size, size);
+
+        // Преобразование строк состояний в enum
+        List<EventState> eventStates = null;
+        if (states != null && !states.isEmpty()) {
+            eventStates = states.stream()
+                    .map(EventState::valueOf)
+                    .collect(Collectors.toList());
+        }
+
+        List<Event> events = eventRepository.findAdminEvents(
+                users,
+                eventStates,
+                categories,
+                rangeStart,
+                rangeEnd,
+                pageable
+        );
+
+        return events.stream()
+                .map(eventMapper::toFullDto)
+                .collect(Collectors.toList());
+    }
 }
