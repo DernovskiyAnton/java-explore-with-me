@@ -10,6 +10,7 @@ import ru.practicum.ewm.category.dto.NewCategoryDto;
 import ru.practicum.ewm.category.mapper.CategoryMapper;
 import ru.practicum.ewm.category.model.Category;
 import ru.practicum.ewm.category.repository.CategoryRepository;
+import ru.practicum.ewm.event.repository.EventRepository;
 import ru.practicum.ewm.exception.ConflictException;
 import ru.practicum.ewm.exception.NotFoundException;
 
@@ -24,6 +25,7 @@ public class CategoryService {
 
     private final CategoryRepository repository;
     private final CategoryMapper mapper;
+    private final EventRepository eventRepository;
 
     @Transactional
     public CategoryDto addCategory(NewCategoryDto dto) {
@@ -63,10 +65,10 @@ public class CategoryService {
 
         Category category = getCategoryById(catId);
 
-        // TODO: В будущем добавить проверку что категория не используется в событиях
-        // if (eventRepository.existsByCategoryId(catId)) {
-        //     throw new ConflictException("Category is not empty");
-        // }
+        // Проверка что категория не используется в событиях
+        if (eventRepository.existsByCategoryId(catId)) {
+            throw new ConflictException("The category is not empty");
+        }
 
         repository.delete(category);
         log.info("Category deleted: {}", catId);
