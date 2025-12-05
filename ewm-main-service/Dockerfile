@@ -1,3 +1,4 @@
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-CMD ["echo", "EWM Main Service - Coming in Stage 2"]
+COPY target/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
