@@ -88,24 +88,62 @@ public class EventService {
 
     @Transactional
     public EventFullDto updateUserEvent(Long userId, Long eventId, UpdateEventUserRequest dto) {
-        log.info("Updating event: {} by user: {}", eventId, userId);
+        log.info("Updating event {} by user {}", eventId, userId);
 
-        Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
-                .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+        Event event = getEventByIdAndInitiator(eventId, userId);
 
         // Можно изменять только отмененные события или события в состоянии ожидания модерации
-        if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ValidationException("Event date must be at least 2 hours from now");
+        if (event.getState() == EventState.PUBLISHED) {
+            throw new ConflictException("Cannot update published event");
         }
 
-        // Проверка даты события
-        if (dto.getEventDate() != null && dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ConflictException("Event date must be at least 2 hours from now");
+        // Обновление полей (только если они не null)
+        if (dto.getAnnotation() != null) {
+            event.setAnnotation(dto.getAnnotation());
         }
 
-        updateEventFields(event, dto);
+        if (dto.getCategory() != null) {
+            Category category = getCategoryById(dto.getCategory());
+            event.setCategory(category);
+        }
 
-        // Обработка stateAction
+        if (dto.getDescription() != null) {
+            event.setDescription(dto.getDescription());
+        }
+
+        // ИСПРАВЛЕНО: проверка на null перед валидацией
+        if (dto.getEventDate() != null) {
+            if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
+                throw new ValidationException("Event date must be at least 2 hours from now");
+            }
+            event.setEventDate(dto.getEventDate());
+        }
+
+        if (dto.getLocation() != null) {
+            Location location = new Location();
+            location.setLat(dto.getLocation().getLat());
+            location.setLon(dto.getLocation().getLon());
+            Location savedLocation = locationRepository.save(location);
+            event.setLocation(savedLocation);
+        }
+
+        if (dto.getPaid() != null) {
+            event.setPaid(dto.getPaid());
+        }
+
+        if (dto.getParticipantLimit() != null) {
+            event.setParticipantLimit(dto.getParticipantLimit());
+        }
+
+        if (dto.getRequestModeration() != null) {
+            event.setRequestModeration(dto.getRequestModeration());
+        }
+
+        if (dto.getTitle() != null) {
+            event.setTitle(dto.getTitle());
+        }
+
+        // Обработка изменения состояния
         if (dto.getStateAction() != null) {
             switch (dto.getStateAction()) {
                 case SEND_TO_REVIEW:
@@ -125,30 +163,74 @@ public class EventService {
 
     @Transactional
     public EventFullDto updateEventByAdmin(Long eventId, UpdateEventAdminRequest dto) {
-        log.info("Admin updating event: {}", eventId);
+        log.info("Admin updating event {}: {}", eventId, dto);
 
-        Event event = getEventById(eventId);
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
-        // Проверка даты публикации (должна быть не раньше чем за час до начала)
-        if (dto.getEventDate() != null &&
-                event.getPublishedOn() != null &&
-                dto.getEventDate().isBefore(event.getPublishedOn().plusHours(1))) {
-            throw new ConflictException("Event date must be at least 1 hour after publication");
+        // Обновление полей (только если они не null)
+        if (dto.getAnnotation() != null) {
+            event.setAnnotation(dto.getAnnotation());
         }
 
-        updateEventFields(event, dto);
+        if (dto.getCategory() != null) {
+            Category category = getCategoryById(dto.getCategory());
+            event.setCategory(category);
+        }
 
-        // Обработка stateAction
+        if (dto.getDescription() != null) {
+            event.setDescription(dto.getDescription());
+        }
+
+        // ИСПРАВЛЕНО: проверка на null перед валидацией
+        if (dto.getEventDate() != null) {
+            // Если публикуем - проверяем что дата публикации минимум за час до события
+            if (dto.getStateAction() == UpdateEventAdminRequest.StateAction.PUBLISH_EVENT) {
+                if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
+                    throw new ConflictException("Event date must be at least 1 hour from publication time");
+                }
+            }
+            event.setEventDate(dto.getEventDate());
+        }
+
+        if (dto.getLocation() != null) {
+            Location location = new Location();
+            location.setLat(dto.getLocation().getLat());
+            location.setLon(dto.getLocation().getLon());
+            Location savedLocation = locationRepository.save(location);
+            event.setLocation(savedLocation);
+        }
+
+        if (dto.getPaid() != null) {
+            event.setPaid(dto.getPaid());
+        }
+
+        if (dto.getParticipantLimit() != null) {
+            event.setParticipantLimit(dto.getParticipantLimit());
+        }
+
+        if (dto.getRequestModeration() != null) {
+            event.setRequestModeration(dto.getRequestModeration());
+        }
+
+        if (dto.getTitle() != null) {
+            event.setTitle(dto.getTitle());
+        }
+
+        // Обработка изменения состояния администратором
         if (dto.getStateAction() != null) {
             switch (dto.getStateAction()) {
                 case PUBLISH_EVENT:
+                    // Публиковать можно только события в состоянии ожидания
                     if (event.getState() != EventState.PENDING) {
                         throw new ConflictException("Cannot publish the event because it's not in the right state: " + event.getState());
                     }
                     event.setState(EventState.PUBLISHED);
                     event.setPublishedOn(LocalDateTime.now());
                     break;
+
                 case REJECT_EVENT:
+                    // Отклонить можно только неопубликованные события
                     if (event.getState() == EventState.PUBLISHED) {
                         throw new ConflictException("Cannot reject the event because it's already published");
                     }
@@ -432,5 +514,16 @@ public class EventService {
         return events.stream()
                 .map(eventMapper::toFullDto)
                 .collect(Collectors.toList());
+    }
+
+    private Event getEventByIdAndInitiator(Long eventId, Long userId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+
+        if (!event.getInitiator().getId().equals(userId)) {
+            throw new NotFoundException("Event with id=" + eventId + " was not found");
+        }
+
+        return event;
     }
 }
