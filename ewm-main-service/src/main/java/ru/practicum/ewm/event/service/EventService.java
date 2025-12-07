@@ -217,13 +217,16 @@ public class EventService {
         }
 
         Pageable pageable = PageRequest.of(from / size, size);
-
         List<Event> events = eventRepository.findAdminEvents(
                 users, eventStates, categories, rangeStart, rangeEnd, pageable
         );
 
         return events.stream()
-                .map(eventMapper::toFullDto)
+                .map(event -> {
+                    Long confirmedRequests = participationRequestRepository
+                            .countByEventIdAndStatus(event.getId(), RequestStatus.CONFIRMED);
+                    return eventMapper.toFullDto(event, confirmedRequests);
+                })
                 .collect(Collectors.toList());
     }
 
