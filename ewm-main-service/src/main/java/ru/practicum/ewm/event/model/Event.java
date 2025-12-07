@@ -64,7 +64,7 @@ public class Event {
     private Boolean requestModeration = true;
 
     @Column(name = "confirmed_requests", nullable = false)
-    private Integer confirmedRequests = 0;
+    private Long confirmedRequests = 0L;
 
     @Column(nullable = false)
     private Long views = 0L;

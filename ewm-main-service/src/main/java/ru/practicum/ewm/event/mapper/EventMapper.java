@@ -34,7 +34,7 @@ public class EventMapper {
         event.setTitle(dto.getTitle());
         event.setCreatedOn(LocalDateTime.now());
         event.setState(EventState.PENDING);
-        event.setConfirmedRequests(0);
+        event.setConfirmedRequests(0L);
         event.setViews(0L);
         return event;
     }
@@ -57,6 +57,12 @@ public class EventMapper {
         dto.setState(event.getState());
         dto.setTitle(event.getTitle());
         dto.setViews(event.getViews());
+        return dto;
+    }
+
+    public EventFullDto toFullDto(Event event, Long confirmedRequests) {
+        EventFullDto dto = toFullDto(event);
+        dto.setConfirmedRequests(confirmedRequests != null ? confirmedRequests : 0L);
         return dto;
     }
 

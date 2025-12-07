@@ -29,24 +29,18 @@ public class PublicEventController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeStart,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeEnd,
             @RequestParam(defaultValue = "false") Boolean onlyAvailable,
-            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String sort,  // ← String, не EventSort!
             @RequestParam(defaultValue = "0") Integer from,
             @RequestParam(defaultValue = "10") Integer size,
             HttpServletRequest request) {
 
-        log.info("GET /events: text={}, categories={}, paid={}, rangeStart={}, rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
-                text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
-
-        EventSort sortEnum = null;
-        if (sort != null) {
-            sortEnum = EventSort.valueOf(sort);
-        }
-
         String ip = request.getRemoteAddr();
         String uri = request.getRequestURI();
 
+        log.info("GET /events: text={}, categories={}, paid={}, sort={}", text, categories, paid, sort);
+
         return eventService.getPublicEvents(text, categories, paid, rangeStart, rangeEnd,
-                onlyAvailable, sortEnum, from, size, ip, uri);
+                onlyAvailable, sort, from, size, ip, uri);  // ← передаем sort как String
     }
 
     @GetMapping("/{id}")

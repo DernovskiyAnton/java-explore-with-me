@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS categories (
 -- Таблица локаций
 CREATE TABLE IF NOT EXISTS locations (
     id BIGSERIAL PRIMARY KEY,
-    lat FLOAT NOT NULL,
-    lon FLOAT NOT NULL
+    lat REAL NOT NULL,
+    lon REAL NOT NULL
 );
 
 -- Таблица событий
