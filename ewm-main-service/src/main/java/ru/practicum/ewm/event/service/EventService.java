@@ -398,7 +398,7 @@ public class EventService {
 
         // 2. Небольшая задержка для обработки статистики
         try {
-            Thread.sleep(100);
+            Thread.sleep(500);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -461,7 +461,7 @@ public class EventService {
                     LocalDateTime.of(2020, 1, 1, 0, 0),
                     LocalDateTime.now().plusDays(1),
                     List.of("/events/" + eventId),
-                    false  // ✅ ИЗМЕНЕНО: false = считать ВСЕ просмотры
+                    true
             );
             if (stats != null && !stats.isEmpty()) {
                 return stats.get(0).getHits();
@@ -486,7 +486,7 @@ public class EventService {
                     LocalDateTime.of(2020, 1, 1, 0, 0),
                     LocalDateTime.now().plusDays(1),
                     uris,
-                    false
+                    true
             );
 
             if (stats != null && !stats.isEmpty()) {
