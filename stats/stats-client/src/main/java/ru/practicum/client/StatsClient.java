@@ -44,12 +44,13 @@ public class StatsClient {
                                        Boolean unique) {
         log.info("Getting stats from stats server");
 
-        String encodedStart = URLEncoder.encode(start.format(FORMATTER), StandardCharsets.UTF_8);
-        String encodedEnd = URLEncoder.encode(end.format(FORMATTER), StandardCharsets.UTF_8);
+        // ✅ УБРАЛИ URLEncoder.encode - UriComponentsBuilder сам кодирует!
+        String startStr = start.format(FORMATTER);
+        String endStr = end.format(FORMATTER);
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(serverUrl + "/stats")
-                .queryParam("start", encodedStart)
-                .queryParam("end", encodedEnd);
+                .queryParam("start", startStr)    // ✅ Без ручного кодирования
+                .queryParam("end", endStr);       // ✅ Без ручного кодирования
 
         if (uris != null && !uris.isEmpty()) {
             builder.queryParam("uris", String.join(",", uris));

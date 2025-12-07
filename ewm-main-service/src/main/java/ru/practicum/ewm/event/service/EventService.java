@@ -457,18 +457,33 @@ public class EventService {
 
     private Long getViewsForEvent(Long eventId) {
         try {
-            List<ViewStatsDto> stats = statsClient.getStats(
-                    LocalDateTime.of(2020, 1, 1, 0, 0),
-                    LocalDateTime.now().plusDays(1),
-                    List.of("/events/" + eventId),
-                    true
-            );
+            LocalDateTime start = LocalDateTime.of(2020, 1, 1, 0, 0);
+            LocalDateTime end = LocalDateTime.now().plusDays(1);
+            List<String> uris = List.of("/events/" + eventId);
+
+            log.info("=== REQUESTING STATS ===");
+            log.info("Event ID: {}", eventId);
+            log.info("URI: {}", uris);
+            log.info("Start: {}, End: {}", start, end);
+            log.info("Unique: true");
+
+            List<ViewStatsDto> stats = statsClient.getStats(start, end, uris, true);
+
+            log.info("=== STATS RESPONSE ===");
+            log.info("Stats: {}", stats);
+
             if (stats != null && !stats.isEmpty()) {
-                return stats.get(0).getHits();
+                Long hits = stats.get(0).getHits();
+                log.info("Returning hits: {}", hits);
+                return hits;
+            } else {
+                log.warn("Stats is null or empty!");
             }
         } catch (Exception e) {
             log.error("Failed to get views for event {}", eventId, e);
         }
+
+        log.warn("Returning 0 views for event {}", eventId);
         return 0L;
     }
 
