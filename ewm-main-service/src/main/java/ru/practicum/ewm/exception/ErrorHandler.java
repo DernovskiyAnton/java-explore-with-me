@@ -75,4 +75,17 @@ public class ErrorHandler {
         log.error("Missing parameter: {}", e.getMessage());
         return Map.of("error", "Required parameter '" + e.getParameterName() + "' is missing");
     }
+
+    @ExceptionHandler(ValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleValidationException(ValidationException e) {
+        log.error("Validation error: {}", e.getMessage());
+        return new ApiError(
+                "BAD_REQUEST",
+                "Incorrectly made request.",
+                e.getMessage(),
+                LocalDateTime.now(),
+                Collections.emptyList()
+        );
+    }
 }
