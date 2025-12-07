@@ -28,8 +28,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             "     LOWER(e.description) LIKE CONCAT('%', LOWER(:text), '%')) " +
             "AND (:categories IS NULL OR e.category.id IN :categories) " +
             "AND (:paid IS NULL OR e.paid = :paid) " +
-            "AND (:rangeStart IS NULL OR e.eventDate >= :rangeStart) " +
-            "AND (:rangeEnd IS NULL OR e.eventDate <= :rangeEnd)")
+            "AND (COALESCE(:rangeStart, e.eventDate) <= e.eventDate) " +
+            "AND (COALESCE(:rangeEnd, e.eventDate) >= e.eventDate)")
     List<Event> findPublicEvents(@Param("text") String text,
                                  @Param("categories") List<Long> categories,
                                  @Param("paid") Boolean paid,
@@ -37,13 +37,12 @@ public interface EventRepository extends JpaRepository<Event, Long> {
                                  @Param("rangeEnd") LocalDateTime rangeEnd,
                                  Pageable pageable);
 
-    // ИСПРАВЛЕННЫЙ запрос для админского поиска
     @Query("SELECT e FROM Event e " +
             "WHERE (:users IS NULL OR e.initiator.id IN :users) " +
             "AND (:states IS NULL OR e.state IN :states) " +
             "AND (:categories IS NULL OR e.category.id IN :categories) " +
-            "AND (:rangeStart IS NULL OR e.eventDate >= :rangeStart) " +
-            "AND (:rangeEnd IS NULL OR e.eventDate <= :rangeEnd)")
+            "AND (COALESCE(:rangeStart, e.eventDate) <= e.eventDate) " +
+            "AND (COALESCE(:rangeEnd, e.eventDate) >= e.eventDate)")
     List<Event> findAdminEvents(@Param("users") List<Long> users,
                                 @Param("states") List<EventState> states,
                                 @Param("categories") List<Long> categories,
