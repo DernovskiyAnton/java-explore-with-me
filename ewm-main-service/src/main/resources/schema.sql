@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS compilations (
     pinned BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+-- Таблица комментариев к событиям
+CREATE TABLE IF NOT EXISTS comments (
+    id BIGSERIAL PRIMARY KEY,
+    text VARCHAR(5000) NOT NULL,
+    event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    edited TIMESTAMP WITHOUT TIME ZONE
+);
+
 -- Связь многие-ко-многим между событиями и подборками
 CREATE TABLE IF NOT EXISTS compilation_events (
     compilation_id BIGINT NOT NULL REFERENCES compilations(id) ON DELETE CASCADE,
@@ -81,3 +91,8 @@ CREATE INDEX IF NOT EXISTS idx_requests_status ON participation_requests(status)
 -- Подборки и события
 CREATE INDEX IF NOT EXISTS idx_compilation_events_compilation ON compilation_events(compilation_id);
 CREATE INDEX IF NOT EXISTS idx_compilation_events_event ON compilation_events(event_id);
+
+-- Индексы для оптимизации запросов
+CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id);
+CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created ON comments(created);
