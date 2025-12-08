@@ -332,4 +332,4 @@ postman/feature.json                        (Postman коллекция)
 Дипломный проект Яндекс Практикум - Java Backend Developer  
 Этап 3: Дополнительная функциональность "Комментарии к событиям"
 
-Ссылка на PR - https://github.com/DernovskiyAnton/java-explore-with-me/pull/3
+Ссылка на PR - https://github.com/DernovskiyAnton/java-explore-with-me/pull/4
