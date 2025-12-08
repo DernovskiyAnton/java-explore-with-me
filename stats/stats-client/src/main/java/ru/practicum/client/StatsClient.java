@@ -12,8 +12,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import ru.practicum.dto.EndpointHitDto;
 import ru.practicum.dto.ViewStatsDto;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -44,12 +42,13 @@ public class StatsClient {
                                        Boolean unique) {
         log.info("Getting stats from stats server");
 
-        String encodedStart = URLEncoder.encode(start.format(FORMATTER), StandardCharsets.UTF_8);
-        String encodedEnd = URLEncoder.encode(end.format(FORMATTER), StandardCharsets.UTF_8);
+        // ✅ УБРАЛИ URLEncoder.encode - UriComponentsBuilder сам кодирует!
+        String startStr = start.format(FORMATTER);
+        String endStr = end.format(FORMATTER);
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(serverUrl + "/stats")
-                .queryParam("start", encodedStart)
-                .queryParam("end", encodedEnd);
+                .queryParam("start", startStr)    // ✅ Без ручного кодирования
+                .queryParam("end", endStr);       // ✅ Без ручного кодирования
 
         if (uris != null && !uris.isEmpty()) {
             builder.queryParam("uris", String.join(",", uris));
@@ -60,7 +59,7 @@ public class StatsClient {
         }
 
         ResponseEntity<List<ViewStatsDto>> response = restTemplate.exchange(
-                builder.toUriString(),
+                builder.build().toUri(),
                 HttpMethod.GET,
                 HttpEntity.EMPTY,
                 new ParameterizedTypeReference<>() {}
